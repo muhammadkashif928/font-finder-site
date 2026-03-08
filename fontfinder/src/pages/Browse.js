@@ -142,7 +142,7 @@ function renderCards(fonts) {
             <i class="fa fa-eye"></i> Preview
           </button>
           <a
-            href="/api/download?family=${encodeURIComponent(f.googleFamily || f.name)}"
+            href="/api/download?family=${encodeURIComponent((f.googleFamily || f.name).split(':')[0].split('[')[0].trim())}"
             class="font-card__btn-download"
             aria-label="Download ${f.name}"
             onclick="event.stopPropagation()"
@@ -236,10 +236,10 @@ function renderModal(font) {
       <!-- CTA -->
       <div class="modal-font__cta">
         <a
-          href="/api/download?family=${encodeURIComponent(font.googleFamily || font.name)}"
+          href="/api/download?family=${encodeURIComponent((font.googleFamily || font.name).split(':')[0].split('[')[0].trim())}"
           class="modal-font__btn-download"
           id="modal-download-btn"
-          download="${(font.googleFamily || font.name).replace(/\s+/g,'_')}.ttf"
+          download="${(font.googleFamily || font.name).split(':')[0].split('[')[0].trim().replace(/\s+/g,'_')}.ttf"
         >
           <i class="fa fa-download"></i>
           Download Free Font
