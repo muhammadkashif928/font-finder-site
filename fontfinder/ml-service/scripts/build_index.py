@@ -64,13 +64,20 @@ def render_font_image(ttf_path: Path, text: str = RENDER_TEXT) -> Optional[bytes
     try:
         bbox = draw.textbbox((0, 0), text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    except AttributeError:
-        tw, th = draw.textsize(text, font=font)  # Pillow < 9
+    except Exception:
+        try:
+            tw, th = draw.textsize(text, font=font)  # Pillow < 9
+        except Exception:
+            tw, th = 200, 40  # fallback dimensions
 
     x = max(4, (RENDER_IMG_SIZE[0] - tw) // 2)
     y = max(4, (RENDER_IMG_SIZE[1] - th) // 2)
 
-    draw.text((x, y), text, fill=(10, 10, 10), font=font)
+    try:
+        draw.text((x, y), text, fill=(10, 10, 10), font=font)
+    except Exception as e:
+        logger.debug(f"  ✗ Could not render {ttf_path.name}: {e}")
+        return None
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
