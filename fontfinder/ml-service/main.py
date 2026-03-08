@@ -21,9 +21,9 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, Header, HTTPException, Request
+from fastapi import FastAPI, File, UploadFile, Header, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 
 from preprocessing import FontImagePreprocessor
@@ -42,6 +42,7 @@ logger = logging.getLogger("ff-ml")
 API_SECRET     = os.getenv("FF_API_SECRET", "dev-secret-change-in-production")
 MAX_BYTES      = 5 * 1024 * 1024   # 5MB
 PORT           = int(os.getenv("PORT", 8080))
+FONTS_DIR      = Path(os.getenv("FONTS_DIR", "/opt/google-fonts"))
 _start         = time.time()
 
 # ─── Global singletons (loaded once per container instance) ───────────────────
@@ -125,6 +126,79 @@ async def health():
         "fonts":       _searcher.index.ntotal if (_searcher and _searcher.is_ready) else 0,
         "uptime_s":    round(time.time() - _start),
     }
+
+
+@app.get("/fonts/search")
+async def fonts_search(q: str = Query("", min_length=0)):
+    """Search available fonts by name — returns list of {name, file, path}."""
+    if not FONTS_DIR.exists():
+        raise HTTPException(503, "Font library not available on this server.")
+
+    q_lower = q.lower().strip()
+    results = []
+    for ttf in sorted(FONTS_DIR.rglob("*.ttf")):
+        name = ttf.stem.replace("-", " ").replace("_", " ")
+        if not q_lower or q_lower in name.lower():
+            results.append({
+                "name":   name,
+                "file":   ttf.name,
+                "family": ttf.parent.name,
+            })
+        if len(results) >= 50:
+            break
+    return {"results": results, "total": len(results)}
+
+
+@app.get("/fonts/download")
+async def font_download(
+    family: str = Query(..., description="Font family name e.g. 'Lora' or 'Roboto'"),
+    x_api_key: str = Header(default=None, alias="X-API-Key"),
+):
+    """
+    Serve a .ttf font file as a direct download.
+    Finds the best match in the font library by family name.
+    """
+    if not _auth_ok(x_api_key):
+        raise HTTPException(401, "Invalid X-API-Key")
+
+    if not FONTS_DIR.exists():
+        raise HTTPException(503, "Font library not available on this server.")
+
+    # Search for the font file
+    family_lower = family.lower().replace(" ", "").replace("-", "")
+
+    best_match = None
+    for ttf in FONTS_DIR.rglob("*.ttf"):
+        stem = ttf.stem.lower().replace("-", "").replace("_", "").replace("[wght]", "")
+        parent = ttf.parent.name.lower().replace("-", "").replace("_", "")
+
+        # Prefer Regular weight files
+        if family_lower in (stem, parent):
+            if "regular" in ttf.stem.lower() or "wght" in ttf.stem.lower():
+                best_match = ttf
+                break
+            elif best_match is None:
+                best_match = ttf
+
+    if not best_match:
+        # Fuzzy fallback — partial match
+        for ttf in FONTS_DIR.rglob("*.ttf"):
+            parent = ttf.parent.name.lower().replace("-", "").replace("_", "")
+            if family_lower in parent or parent in family_lower:
+                best_match = ttf
+                break
+
+    if not best_match:
+        raise HTTPException(404, f"Font '{family}' not found in library.")
+
+    # Serve as download
+    safe_name = family.replace(" ", "_") + ".ttf"
+    return FileResponse(
+        path=str(best_match),
+        media_type="font/ttf",
+        filename=safe_name,
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
 
 
 @app.post("/identify", response_model=IdentifyResponse)

@@ -142,12 +142,11 @@ function renderCards(fonts) {
             <i class="fa fa-eye"></i> Preview
           </button>
           <a
-            href="${f.googleFamily ? `https://fonts.google.com/specimen/${encodeURIComponent(f.googleFamily)}` : '#'}"
-            target="_blank"
-            rel="noopener"
+            href="/api/download?family=${encodeURIComponent(f.googleFamily || f.name)}"
             class="font-card__btn-download"
             aria-label="Download ${f.name}"
             onclick="event.stopPropagation()"
+            download
           >
             <i class="fa fa-download"></i> Download
           </a>
@@ -236,28 +235,15 @@ function renderModal(font) {
 
       <!-- CTA -->
       <div class="modal-font__cta">
-        ${font.free && font.googleFamily ? `
-          <a
-            href="https://fonts.google.com/specimen/${encodeURIComponent(font.googleFamily)}"
-            target="_blank"
-            rel="noopener"
-            class="modal-font__btn-download"
-            id="modal-download-btn"
-          >
-            <i class="fa fa-download"></i>
-            Download Free Font
-          </a>
-        ` : font.free ? `
-          <button class="modal-font__btn-download" id="modal-download-btn" data-font="${font.name}">
-            <i class="fa fa-download"></i>
-            Download Free Font
-          </button>
-        ` : `
-          <a href="https://fonts.google.com/specimen/${encodeURIComponent(font.googleFamily || font.name)}" target="_blank" rel="noopener" class="modal-font__btn-download">
-            <i class="fa fa-download"></i>
-            Download Free Font
-          </a>
-        `}
+        <a
+          href="/api/download?family=${encodeURIComponent(font.googleFamily || font.name)}"
+          class="modal-font__btn-download"
+          id="modal-download-btn"
+          download="${(font.googleFamily || font.name).replace(/\s+/g,'_')}.ttf"
+        >
+          <i class="fa fa-download"></i>
+          Download Free Font
+        </a>
         <a href="/?font=${encodeURIComponent(font.name)}" class="modal-font__btn-primary">
           <i class="fa fa-magnifying-glass"></i>
           Identify in my image
