@@ -132,10 +132,25 @@ function renderCards(fonts) {
             ${f.weights.length} weight${f.weights.length !== 1 ? 's' : ''}
           </span>
           ${f.variable ? `<span class="font-card__meta-item font-card__meta-item--var"><i class="fa fa-sliders"></i> Variable</span>` : ''}
-          <span class="font-card__meta-item ${f.free ? 'font-card__meta-item--free' : 'font-card__meta-item--paid'}">
-            <i class="fa fa-${f.free ? 'circle-check' : 'lock'}"></i>
-            ${f.free ? 'Free' : 'Premium'}
+          <span class="font-card__meta-item font-card__meta-item--free">
+            <i class="fa fa-circle-check"></i>
+            Free
           </span>
+        </div>
+        <div class="font-card__actions">
+          <button class="font-card__btn-preview" data-id="${f.id}" aria-label="Preview ${f.name}">
+            <i class="fa fa-eye"></i> Preview
+          </button>
+          <a
+            href="${f.googleFamily ? `https://fonts.google.com/specimen/${encodeURIComponent(f.googleFamily)}` : '#'}"
+            target="_blank"
+            rel="noopener"
+            class="font-card__btn-download"
+            aria-label="Download ${f.name}"
+            onclick="event.stopPropagation()"
+          >
+            <i class="fa fa-download"></i> Download
+          </a>
         </div>
       </div>
     </div>
@@ -197,18 +212,60 @@ function renderModal(font) {
         </div>
       </div>
 
+      <!-- Live preview input -->
+      <div class="modal-font__live-preview">
+        <p class="modal-font__section-title">Live Preview</p>
+        <input
+          type="text"
+          class="modal-font__live-input"
+          id="modal-live-input"
+          placeholder="Type anything to preview..."
+          value="${PREVIEW_TEXT}"
+          autocomplete="off"
+        />
+        <div class="modal-font__live-display" id="modal-live-display" data-font-id="${font.id}" ${font.googleFamily ? `data-gfamily="${font.googleFamily}"` : ''}>
+          ${PREVIEW_TEXT}
+        </div>
+        <div class="modal-font__live-sizes">
+          <button class="modal-size-btn modal-size-btn--active" data-size="32">32px</button>
+          <button class="modal-size-btn" data-size="48">48px</button>
+          <button class="modal-size-btn" data-size="64">64px</button>
+          <button class="modal-size-btn" data-size="96">96px</button>
+        </div>
+      </div>
+
       <!-- CTA -->
       <div class="modal-font__cta">
+        ${font.free && font.googleFamily ? `
+          <a
+            href="https://fonts.google.com/specimen/${encodeURIComponent(font.googleFamily)}"
+            target="_blank"
+            rel="noopener"
+            class="modal-font__btn-download"
+            id="modal-download-btn"
+          >
+            <i class="fa fa-download"></i>
+            Download Free Font
+          </a>
+        ` : font.free ? `
+          <button class="modal-font__btn-download" id="modal-download-btn" data-font="${font.name}">
+            <i class="fa fa-download"></i>
+            Download Free Font
+          </button>
+        ` : `
+          <a href="https://fonts.google.com/specimen/${encodeURIComponent(font.googleFamily || font.name)}" target="_blank" rel="noopener" class="modal-font__btn-download">
+            <i class="fa fa-download"></i>
+            Download Free Font
+          </a>
+        `}
         <a href="/?font=${encodeURIComponent(font.name)}" class="modal-font__btn-primary">
           <i class="fa fa-magnifying-glass"></i>
-          Identify this font in my image
+          Identify in my image
         </a>
-        ${font.free ? `
-          <a href="/browse?cat=${font.category}" class="modal-font__btn-ghost">
-            <i class="fa fa-layer-group"></i>
-            More ${font.category} fonts
-          </a>
-        ` : ''}
+        <a href="/browse?cat=${font.category}" class="modal-font__btn-ghost">
+          <i class="fa fa-layer-group"></i>
+          More ${font.category} fonts
+        </a>
       </div>
     </div>
   `;
@@ -382,7 +439,7 @@ export function init() {
 
     // Load font in modal
     if (font.googleFamily && !loadedFonts.has(font.googleFamily)) {
-      const url = `https://fonts.googleapis.com/css2?family=${font.googleFamily}&display=swap`;
+      const url = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font.googleFamily)}:wght@100;300;400;500;700;900&display=swap`;
       const link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = url;
@@ -391,6 +448,30 @@ export function init() {
       loadedFonts.add(font.googleFamily);
     } else {
       applyFontFamilies();
+    }
+
+    // Live preview input
+    const liveInput   = document.getElementById('modal-live-input');
+    const liveDisplay = document.getElementById('modal-live-display');
+    liveInput?.addEventListener('input', () => {
+      if (liveDisplay) liveDisplay.textContent = liveInput.value || PREVIEW_TEXT;
+    });
+
+    // Size switcher
+    let currentSize = 32;
+    document.querySelectorAll('.modal-size-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.modal-size-btn').forEach(b => b.classList.remove('modal-size-btn--active'));
+        btn.classList.add('modal-size-btn--active');
+        currentSize = parseInt(btn.dataset.size);
+        if (liveDisplay) liveDisplay.style.fontSize = currentSize + 'px';
+      });
+    });
+
+    // Apply font to live display
+    if (font.googleFamily && liveDisplay) {
+      liveDisplay.style.fontFamily = `'${font.googleFamily}', serif`;
+      liveDisplay.style.fontSize   = currentSize + 'px';
     }
   }
 
