@@ -1,0 +1,23 @@
+# FontFinder ML Service — Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# ── Web framework ───────────────────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+python-multipart==0.0.9    # for file uploads in FastAPI
+pydantic==2.7.1
+
+# ── Image processing ────────────────────────────────────────
+opencv-python-headless==4.9.0.80   # headless = no display dependencies
+Pillow==10.3.0
+
+# ── ML / embeddings ─────────────────────────────────────────
+torch==2.3.0           # CPU only; change to torch==2.3.0+cu118 for CUDA
+torchvision==0.18.0
+numpy==1.26.4
+
+# ── Vector search ────────────────────────────────────────────
+faiss-cpu==1.8.0        # change to faiss-gpu for CUDA acceleration
+
+# ── Font rendering (for build_index.py) ─────────────────────
+tqdm==4.66.4            # progress bars during index build
