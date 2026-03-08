@@ -655,9 +655,29 @@ export function init() {
     try {
       const { createWorker } = await import('tesseract.js');
       const worker = await createWorker('eng', 1, { logger: () => {} });
-      const { data } = await worker.recognize(off);
+
+      // Try normal first
+      let { data } = await worker.recognize(off);
+      let detected = data.text.trim().replace(/\s+/g, ' ').replace(/[^a-zA-Z0-9 .,!?'"-]/g, '').trim().slice(0, 80);
+
+      // If no result, try inverted (white-on-dark images)
+      if (!detected) {
+        const inv = document.createElement('canvas');
+        inv.width = off.width; inv.height = off.height;
+        const ic = inv.getContext('2d');
+        ic.drawImage(off, 0, 0);
+        const imgData = ic.getImageData(0, 0, inv.width, inv.height);
+        for (let i = 0; i < imgData.data.length; i += 4) {
+          imgData.data[i]   = 255 - imgData.data[i];
+          imgData.data[i+1] = 255 - imgData.data[i+1];
+          imgData.data[i+2] = 255 - imgData.data[i+2];
+        }
+        ic.putImageData(imgData, 0, 0);
+        const { data: data2 } = await worker.recognize(inv);
+        detected = data2.text.trim().replace(/\s+/g, ' ').replace(/[^a-zA-Z0-9 .,!?'"-]/g, '').trim().slice(0, 80);
+      }
+
       await worker.terminate();
-      const detected = data.text.trim().replace(/\s+/g, ' ').slice(0, 80);
       if (statusEl)  statusEl.textContent = detected ? 'Detected — edit if needed:' : 'No text detected — type manually:';
       if (textInput && detected) textInput.value = detected;
     } catch {
