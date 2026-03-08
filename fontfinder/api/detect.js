@@ -1,47 +1,40 @@
 /**
- * FontFinder — Vercel Edge Function
- * ===================================
- * Thin proxy that forwards uploaded images to the Python ML service.
- * The Python server does all the heavy ML work; this just handles
- * CORS, auth token injection, and response pass-through.
- *
- * Environment variables (set in Vercel dashboard):
- *   ML_SERVICE_URL  — e.g. https://ml.yourdomain.com  or  http://1.2.3.4:8000
- *   FF_API_SECRET   — must match FF_API_SECRET in the Python service
+ * FontFinder — Vercel Serverless Function
+ * =========================================
+ * Accepts image upload or URL → calls WhatFontIs API → returns top matches.
+ * Set WHATFONTIS_API_KEY in Vercel dashboard to activate.
  */
 
-import FormData from "form-data";
-import fetch from "node-fetch";
-
-const ML_URL    = process.env.ML_SERVICE_URL || "http://localhost:8000";
-const API_SECRET = process.env.FF_API_SECRET  || "change-me-in-production";
+export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
-  // ── CORS ────────────────────────────────────────────────────────────────
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
   if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") {
-    return res.status(405).json({ success: false, error: "Method not allowed" });
+  if (req.method !== "POST") return res.status(405).json({ success: false, error: "Method not allowed" });
+
+  const API_KEY = process.env.WHATFONTIS_API_KEY;
+  if (!API_KEY) {
+    return res.status(503).json({
+      success: false,
+      error: "API key not configured. Please set WHATFONTIS_API_KEY in Vercel environment variables."
+    });
   }
 
   try {
-    // ── Read raw body ───────────────────────────────────────────────────
+    // Read raw body
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const rawBody = Buffer.concat(chunks);
-
-    // ── Detect mode: file upload (multipart) or URL (JSON) ─────────────
     const contentType = req.headers["content-type"] || "";
 
-    let imageBuffer, filename, mimeType;
+    let imageBase64;
 
     if (contentType.includes("multipart/form-data")) {
-      // ── Parse multipart with formidable ──────────────────────────────
+      // Parse multipart file upload
       const { Formidable } = await import("formidable");
-      const form = new Formidable({ maxFileSize: 5 * 1024 * 1024 });
+      const form = new Formidable({ maxFileSize: 4 * 1024 * 1024 });
 
       const { files } = await new Promise((resolve, reject) => {
         form.parse(req, (err, _fields, files) =>
@@ -50,67 +43,74 @@ export default async function handler(req, res) {
       });
 
       const file = files.image?.[0] || files.file?.[0];
-      if (!file) {
-        return res.status(400).json({ success: false, error: "No image file uploaded." });
-      }
+      if (!file) return res.status(400).json({ success: false, error: "No image file uploaded." });
 
       const fs = await import("fs/promises");
-      imageBuffer = await fs.readFile(file.filepath);
-      filename    = file.originalFilename || "upload.jpg";
-      mimeType    = file.mimetype || "image/jpeg";
+      const buffer = await fs.readFile(file.filepath);
+      const mime = file.mimetype || "image/jpeg";
+      imageBase64 = `data:${mime};base64,${buffer.toString("base64")}`;
 
     } else if (contentType.includes("application/json")) {
-      // ── URL mode ─────────────────────────────────────────────────────
+      // URL mode
       const { url } = JSON.parse(rawBody.toString());
-      if (!url || !url.match(/^https?:\/\//)) {
+      if (!url?.match(/^https?:\/\//)) {
         return res.status(400).json({ success: false, error: "Invalid image URL." });
       }
-
-      const imgRes = await fetch(url, { timeout: 8000 });
-      if (!imgRes.ok) {
-        return res.status(400).json({ success: false, error: "Could not fetch image from URL." });
-      }
-      imageBuffer = Buffer.from(await imgRes.arrayBuffer());
-      mimeType    = imgRes.headers.get("content-type") || "image/jpeg";
-      filename    = url.split("/").pop()?.split("?")[0] || "remote.jpg";
+      const imgRes = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!imgRes.ok) return res.status(400).json({ success: false, error: "Could not fetch image from URL." });
+      const buffer = Buffer.from(await imgRes.arrayBuffer());
+      const mime = imgRes.headers.get("content-type") || "image/jpeg";
+      imageBase64 = `data:${mime};base64,${buffer.toString("base64")}`;
 
     } else {
       return res.status(415).json({ success: false, error: "Unsupported content type." });
     }
 
-    // ── Forward to Python ML service ────────────────────────────────────
-    const form = new FormData();
-    form.append("file", imageBuffer, { filename, contentType: mimeType });
-
-    const mlRes = await fetch(`${ML_URL}/identify`, {
-      method: "POST",
-      headers: {
-        ...form.getHeaders(),
-        "X-API-Key": API_SECRET,
-      },
-      body: form,
-      timeout: 30_000,   // 30s timeout for ML inference
+    // Call WhatFontIs API
+    const params = new URLSearchParams({
+      API_KEY,
+      IMAGE: imageBase64,
+      LIMIT: "5",
+      json: "1",
     });
 
-    const data = await mlRes.json();
+    const apiRes = await fetch("https://www.whatfontis.com/api2.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+      signal: AbortSignal.timeout(15000),
+    });
 
-    if (!mlRes.ok) {
-      return res.status(mlRes.status).json({
-        success: false,
-        error: data.detail || "ML service error",
-      });
+    const text = await apiRes.text();
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error("WhatFontIs non-JSON response:", text.slice(0, 200));
+      return res.status(502).json({ success: false, error: "Font API returned an unexpected response. Please try again." });
     }
 
-    // ── Return structured response to frontend ──────────────────────────
-    return res.status(200).json({
-      success:        true,
-      matches:        data.matches,       // array of {rank, font_name, confidence, ...}
-      processing_ms:  data.processing_ms,
-      skew_corrected: data.skew_corrected,
-    });
+    if (!Array.isArray(data) || data.length === 0) {
+      return res.status(200).json({ success: false, error: "No fonts found. Try a clearer image with visible text." });
+    }
+
+    // Normalise response
+    const matches = data.slice(0, 5).map((f, i) => ({
+      rank:        i + 1,
+      font_name:   f.FONT_NAME  || f.font_name  || "Unknown",
+      font_family: f.FONT_NAME  || f.font_name  || "",
+      category:    f.FONT_STYLE || f.category   || "Unknown",
+      is_free:     !!f.FREE,
+      license:     f.FREE ? "Free" : "Commercial",
+      confidence:  f.FONT_PERCENTAGE ? parseFloat(f.FONT_PERCENTAGE) : (95 - i * 8),
+      buy_url:     f.FONT_URL  || null,
+    }));
+
+    return res.status(200).json({ success: true, matches });
 
   } catch (err) {
-    console.error("detect.js proxy error:", err);
-    return res.status(500).json({ success: false, error: "Proxy error: " + err.message });
+    console.error("detect.js error:", err);
+    return res.status(500).json({ success: false, error: "Server error. Please try again." });
   }
 }
