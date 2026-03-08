@@ -1,0 +1,11 @@
+# Lean inference requirements (used in Docker production image)
+# NO PyTorch — ONNX Runtime only → ~200MB smaller Docker image
+
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+python-multipart==0.0.9
+pydantic==2.7.1
+opencv-python-headless==4.9.0.80
+numpy==1.26.4
+onnxruntime==1.18.0
+faiss-cpu==1.8.0

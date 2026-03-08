@@ -1,0 +1,49 @@
+# Google Cloud Build — Auto-deploy FontFinder ML to Cloud Run
+# ============================================================
+# Trigger this manually or connect to GitHub for auto-deploy on push.
+#
+# One-time setup:
+#   gcloud services enable cloudbuild.googleapis.com run.googleapis.com
+#   gcloud builds submit --config cloudbuild.yaml --substitutions _REGION=us-central1,_PROJECT=YOUR_PROJECT_ID
+
+substitutions:
+  _REGION:  us-central1
+  _SERVICE: fontfinder-ml
+  _IMAGE:   gcr.io/$PROJECT_ID/fontfinder-ml
+
+steps:
+  # Step 1: Build Docker image (multi-stage — exports ONNX inside)
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - $_IMAGE
+      - .
+    dir: ml-service
+
+  # Step 2: Push to Google Container Registry
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - $_IMAGE
+
+  # Step 3: Deploy to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - $_SERVICE
+      - --image=$_IMAGE
+      - --region=$_REGION
+      - --platform=managed
+      - --allow-unauthenticated
+      - --memory=512Mi
+      - --cpu=1
+      - --concurrency=10
+      - --timeout=30
+      - --min-instances=0
+      - --max-instances=5
+
+images:
+  - $_IMAGE
