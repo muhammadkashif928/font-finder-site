@@ -78,6 +78,7 @@ export function render() {
             <!-- Results header bar -->
             <div class="r-header">
               <div class="r-header__left">
+                <div id="r-thumb-wrap" class="hidden"></div>
                 <span class="r-header__label">Results for</span>
                 <span class="r-header__word" id="r-detected-word"></span>
                 <span class="r-header__count" id="r-count"></span>
@@ -163,19 +164,26 @@ export function showError(msg) {
 export function showResults(data) {
   _currentFonts = data.fonts || [];
   _detectedWord = data.detected_text || '';
-
-  // Set preview text to detected word if available, else font name
-  _previewText = _detectedWord || DEFAULT_PREVIEW;
+  _previewText  = _detectedWord || DEFAULT_PREVIEW;
 
   setState('content');
   setupControls();
   renderAllCards();
 
-  // Update header
+  // Update header word chip
   const wordEl  = document.getElementById('r-detected-word');
   const countEl = document.getElementById('r-count');
-  if (wordEl)  wordEl.textContent  = _detectedWord  || 'your text';
+  if (wordEl)  wordEl.textContent  = _detectedWord || 'your image';
   if (countEl) countEl.textContent = `${_currentFonts.length} fonts`;
+
+  // Show cropped thumbnail in header if available
+  const thumbWrap = document.getElementById('r-thumb-wrap');
+  if (thumbWrap && data.cropped_thumb) {
+    thumbWrap.innerHTML = `<img src="${data.cropped_thumb}" class="r-header__thumb" alt="Selected text">`;
+    thumbWrap.classList.remove('hidden');
+  } else if (thumbWrap) {
+    thumbWrap.classList.add('hidden');
+  }
 
   // Set preview input value
   const inp = document.getElementById('r-preview-text');

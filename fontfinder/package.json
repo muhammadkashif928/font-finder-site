@@ -10,7 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "formidable": "^3.5.1"
+    "formidable": "^3.5.1",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "vite": "^5.0.0"

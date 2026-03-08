@@ -21,33 +21,91 @@
 }
 
 /* ══════════════════════════════════════════════════════════
-   CROP EDITOR — Fullscreen
+   CROP SECTION — Inline (within hero)
 ══════════════════════════════════════════════════════════ */
-.crop-editor {
-  position: fixed; inset: 0; z-index: 9000;
-  background: #000;
+.crop-section {
+  width: 100%; background: #06060f;
   display: flex; flex-direction: column;
+  border-top: 1px solid rgba(255,255,255,0.06);
 }
-.crop-editor.hidden { display: none; }
+.crop-section.hidden { display: none; }
+
+/* Top bar */
+.crop-section__topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; gap: 12px; flex-wrap: wrap;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.crop-section__file-info {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.82rem; font-weight: 600; color: var(--text);
+}
+.crop-section__file-info i { color: var(--muted); }
+.crop-section__instructions {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.78rem; color: var(--muted);
+}
+.crop-section__back {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.78rem; font-weight: 600; color: var(--muted);
+  background: none; border: none; cursor: pointer; padding: 6px 10px;
+  border-radius: 8px; transition: all 0.15s;
+}
+.crop-section__back:hover { background: rgba(255,255,255,0.06); color: var(--text); }
 
 /* Canvas area */
-.crop-editor__area {
-  flex: 1; position: relative;
+.crop-section__canvas-area {
+  position: relative; min-height: 58vh;
   display: flex; align-items: center; justify-content: center;
-  overflow: hidden; min-height: 0;
+  overflow: hidden; background: #06060f;
 }
-.crop-editor__area canvas {
-  display: block; max-width: 100%; max-height: 100%;
+.crop-section__canvas-area canvas {
+  display: block; max-width: 100%; max-height: 62vh;
   cursor: crosshair; user-select: none; touch-action: none;
 }
 
 /* Drag hint */
-.crop-editor__hint {
-  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-  background: rgba(255,255,255,0.1); backdrop-filter: blur(8px);
-  border: 1px solid rgba(255,255,255,0.15); border-radius: 99px;
-  padding: 8px 20px; font-size: 0.8rem; color: rgba(255,255,255,0.8);
+.crop-section__hint {
+  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+  background: rgba(255,255,255,0.08); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 99px;
+  padding: 7px 18px; font-size: 0.78rem; color: rgba(255,255,255,0.75);
   white-space: nowrap; pointer-events: none;
+}
+
+/* Text detection bar */
+.crop-text-bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 20px;
+  background: rgba(255,255,255,0.03);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  flex-wrap: wrap;
+}
+.crop-text-bar.hidden { display: none; }
+.crop-text-bar__thumb {
+  border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);
+  flex-shrink: 0; max-width: 100px; max-height: 60px;
+  background: #fff;
+}
+.crop-text-bar__right {
+  flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 6px;
+}
+.crop-text-bar__ocr-row {
+  display: flex; align-items: center; gap: 6px;
+}
+.crop-text-bar__icon { color: var(--indigo); font-size: 0.8rem; }
+.crop-text-bar__label { font-size: 0.75rem; color: var(--muted); }
+.crop-text-bar__input {
+  width: 100%; padding: 8px 12px; border-radius: 8px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text); font-size: 0.88rem; outline: none; box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+.crop-text-bar__input:focus { border-color: rgba(99,102,241,0.4); }
+.crop-text-bar__btn {
+  flex-shrink: 0; white-space: nowrap;
+  padding: 12px 20px !important;
 }
 
 /* Floating tooltip on selection */
@@ -1528,6 +1586,11 @@
 }
 .r-header__left {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.r-header__thumb {
+  height: 36px; max-width: 100px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.12); object-fit: contain;
+  background: #fff; flex-shrink: 0;
 }
 .r-header__label { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
 .r-header__word  {

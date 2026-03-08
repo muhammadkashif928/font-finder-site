@@ -108,6 +108,9 @@ document.addEventListener('ff:submit', async () => {
 
     data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || `Server error (${res.status})`);
+    // Pass detected text + cropped thumbnail from crop editor
+    if (state.detectedText) data.detected_text  = state.detectedText;
+    if (state.croppedThumb) data.cropped_thumb   = state.croppedThumb;
     Results.showResults(data);
 
   } catch (err) {

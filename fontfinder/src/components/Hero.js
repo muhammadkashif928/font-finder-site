@@ -192,14 +192,29 @@ export function render() {
 
       </div>
 
-      <!-- ── Crop Editor (fullscreen) ───────────────────── -->
-      <div class="crop-editor hidden" id="crop-editor" role="dialog" aria-modal="true" aria-label="Select text area">
+      <!-- ── Inline Crop Section ─────────────────────────── -->
+      <div class="crop-section hidden" id="crop-section">
+
+        <!-- Top bar -->
+        <div class="crop-section__topbar">
+          <div class="crop-section__file-info">
+            <i class="fa fa-image"></i>
+            <span id="crop-filename">image.jpg</span>
+          </div>
+          <div class="crop-section__instructions">
+            <i class="fa fa-hand-pointer"></i>
+            Draw a box around the text you want to identify
+          </div>
+          <button class="crop-section__back" id="crop-back-btn">
+            <i class="fa fa-xmark"></i> Change Image
+          </button>
+        </div>
 
         <!-- Canvas area -->
-        <div class="crop-editor__area" id="crop-canvas-wrap">
+        <div class="crop-section__canvas-area" id="crop-canvas-wrap">
           <canvas id="crop-canvas"></canvas>
 
-          <!-- Floating selection tooltip -->
+          <!-- Floating tooltip on selection -->
           <div class="crop-tooltip hidden" id="crop-tooltip">
             <button class="crop-tooltip__btn crop-tooltip__btn--primary" id="crop-confirm">
               <i class="fa fa-magnifying-glass"></i> Identify font
@@ -211,9 +226,29 @@ export function render() {
           </div>
 
           <!-- Drag hint -->
-          <div class="crop-editor__hint" id="crop-hint">
+          <div class="crop-section__hint" id="crop-hint">
             <i class="fa fa-hand-pointer"></i> Click and drag to select the text you want to identify
           </div>
+        </div>
+
+        <!-- Text detection bar (shown after selection) -->
+        <div class="crop-text-bar hidden" id="crop-text-bar">
+          <canvas id="crop-thumb-canvas" class="crop-text-bar__thumb"></canvas>
+          <div class="crop-text-bar__right">
+            <div class="crop-text-bar__ocr-row">
+              <i class="fa fa-font crop-text-bar__icon"></i>
+              <span class="crop-text-bar__label" id="crop-ocr-status">Detecting text…</span>
+            </div>
+            <input
+              type="text"
+              id="crop-text-input"
+              class="crop-text-bar__input"
+              placeholder="Type the text you see in the selection…"
+            >
+          </div>
+          <button class="hero__identify-btn crop-text-bar__btn" id="crop-identify-btn">
+            <i class="fa fa-magnifying-glass"></i> Identify Font
+          </button>
         </div>
 
         <!-- Bottom toolbar -->
@@ -222,15 +257,7 @@ export function render() {
             <i class="fa fa-arrow-up-from-bracket"></i> Upload new
           </label>
           <input type="file" id="crop-new-input" accept="image/*" class="visually-hidden">
-
           <div class="crop-toolbar__sep"></div>
-
-          <button class="crop-toolbar__btn" id="crop-select-btn">
-            <i class="fa fa-crop-simple"></i> Select Custom
-          </button>
-
-          <div class="crop-toolbar__sep"></div>
-
           <div class="crop-toolbar__rotate">
             <i class="fa fa-rotate"></i>
             <span class="crop-toolbar__rotate-label">Rotate</span>
@@ -238,9 +265,7 @@ export function render() {
             <input type="range" id="crop-rotate" min="-180" max="180" value="0" class="crop-rotate-slider">
             <span class="crop-rotate-val">+180°</span>
           </div>
-
           <div class="crop-toolbar__sep"></div>
-
           <button class="crop-toolbar__btn" id="crop-reset-btn">
             <i class="fa fa-undo"></i> Reset
           </button>
@@ -380,9 +405,9 @@ export function init() {
 
   window._ff.reset = reset;
 
-  // ── Crop Editor ──────────────────────────────────────────
+  // ── Crop Section ─────────────────────────────────────────
   const cropBtn      = document.getElementById('crop-btn');
-  const cropEditor   = document.getElementById('crop-editor');
+  const cropSection  = document.getElementById('crop-section');
   const cropCanvas   = document.getElementById('crop-canvas');
   const cropHint     = document.getElementById('crop-hint');
   const cropTooltip  = document.getElementById('crop-tooltip');
@@ -393,260 +418,294 @@ export function init() {
   const cropRotate   = document.getElementById('crop-rotate');
 
   let cs = { dragging:false, startX:0, startY:0, rect:null, img:null, scale:1, rotation:0 };
+  let _croppedDataURL = '';
 
-  cropBtn?.addEventListener('click', openEditor);
+  cropBtn?.addEventListener('click', openCropSection);
+  document.getElementById('crop-back-btn')?.addEventListener('click', closeCropSection);
 
-  // "Upload new" inside editor
   cropNewInput?.addEventListener('change', e => {
     const f = e.target.files[0];
-    if (f) { handleFile(f); }
+    if (f) handleFile(f);
   });
 
-  function openEditorFromSrc(src) {
+  function openEditorFromSrc(src, filename) {
     const img = new Image();
     img.onload = () => {
       cs = { dragging:false, startX:0, startY:0, rect:null, img, scale:1, rotation:0 };
       if (cropRotate) cropRotate.value = 0;
       cropTooltip?.classList.add('hidden');
       cropHint?.classList.remove('hidden');
-      // Show editor first so clientWidth is available
-      cropEditor?.classList.remove('hidden');
-      document.body.style.overflow = 'hidden';
-      // Wait for layout then size canvas
-      requestAnimationFrame(() => requestAnimationFrame(() => setupEditorCanvas(img)));
+      document.getElementById('crop-text-bar')?.classList.add('hidden');
+      const fnEl = document.getElementById('crop-filename');
+      if (fnEl && filename) fnEl.textContent = filename;
+      // Hide hero content, show inline crop section
+      document.getElementById('hero-ctas')?.classList.add('hidden');
+      document.getElementById('hero-tool')?.classList.add('hidden');
+      document.getElementById('hero-tips')?.classList.add('hidden');
+      document.getElementById('hero-drag-hint')?.classList.add('hidden');
+      document.querySelector('.hero__right')?.classList.add('hidden');
+      cropSection?.classList.remove('hidden');
+      cropSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Wait for layout before sizing canvas
+      requestAnimationFrame(() => requestAnimationFrame(() => setupCropCanvas(img)));
     };
     img.src = src;
   }
 
-  // Rotate
+  function openCropSection() {
+    const src = previewImg.src;
+    if (!src || src === window.location.href) return;
+    openEditorFromSrc(src, previewName?.textContent || '');
+  }
+
+  function closeCropSection() {
+    cropSection?.classList.add('hidden');
+    document.getElementById('hero-ctas')?.classList.remove('hidden');
+    document.getElementById('hero-tips')?.classList.remove('hidden');
+    document.getElementById('hero-drag-hint')?.classList.remove('hidden');
+    document.querySelector('.hero__right')?.classList.remove('hidden');
+    reset();
+  }
+
   cropRotate?.addEventListener('input', () => {
     cs.rotation = parseInt(cropRotate.value);
     cs.rect = null;
     cropTooltip?.classList.add('hidden');
-    redrawEditor();
+    document.getElementById('crop-text-bar')?.classList.add('hidden');
+    redrawCrop();
   });
 
-  // Reset
   cropResetBtn?.addEventListener('click', () => {
     cs.rect = null; cs.rotation = 0;
     if (cropRotate) cropRotate.value = 0;
     cropTooltip?.classList.add('hidden');
     cropHint?.classList.remove('hidden');
-    redrawEditor();
+    document.getElementById('crop-text-bar')?.classList.add('hidden');
+    redrawCrop();
   });
 
-  // Remove selection
   cropRemoveSel?.addEventListener('click', () => {
     cs.rect = null;
     cropTooltip?.classList.add('hidden');
     cropHint?.classList.remove('hidden');
-    redrawEditor();
+    document.getElementById('crop-text-bar')?.classList.add('hidden');
+    redrawCrop();
   });
 
-  function openEditor() {
-    const src = previewImg.src;
-    if (!src || src === window.location.href) return;
-    openEditorFromSrc(src);
-  }
-
-  function closeEditor() {
-    cropEditor?.classList.add('hidden');
-    document.body.style.overflow = '';
-  }
-
-  function setupEditorCanvas(img) {
-    const toolbarH = 64;
-    const maxW  = window.innerWidth;
-    const maxH  = window.innerHeight - toolbarH - 8;
+  function setupCropCanvas(img) {
+    const wrap  = document.getElementById('crop-canvas-wrap');
+    const maxW  = (wrap?.clientWidth  || window.innerWidth)  - 0;
+    const maxH  = (wrap?.clientHeight || Math.round(window.innerHeight * 0.62)) - 0;
     const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
     cropCanvas.width  = Math.round(img.naturalWidth  * scale);
     cropCanvas.height = Math.round(img.naturalHeight * scale);
     cs.scale = scale;
-    redrawEditor();
+    redrawCrop();
   }
 
-  function redrawEditor() {
+  function redrawCrop() {
     const { img, rect, scale, rotation } = cs;
     if (!img) return;
     const ctx = cropCanvas.getContext('2d');
-    const cw = cropCanvas.width, ch = cropCanvas.height;
-
+    const cw  = cropCanvas.width, ch = cropCanvas.height;
     ctx.clearRect(0, 0, cw, ch);
 
-    // Draw rotated image
+    // Draw image
     ctx.save();
-    ctx.translate(cw / 2, ch / 2);
+    ctx.translate(cw/2, ch/2);
     ctx.rotate((rotation * Math.PI) / 180);
-    ctx.drawImage(img, -cw / 2, -ch / 2, cw, ch);
+    ctx.drawImage(img, -cw/2, -ch/2, cw, ch);
     ctx.restore();
 
-    if (rect && Math.abs(rect.w) > 4 && Math.abs(rect.h) > 4) {
-      const rx = Math.min(rect.x, rect.x + rect.w);
-      const ry = Math.min(rect.y, rect.y + rect.h);
-      const rw = Math.abs(rect.w);
-      const rh = Math.abs(rect.h);
+    if (!rect || Math.abs(rect.w) < 4 || Math.abs(rect.h) < 4) return;
 
-      // Dim overlay
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(0, 0, cw, ch);
+    const rx = Math.min(rect.x, rect.x + rect.w);
+    const ry = Math.min(rect.y, rect.y + rect.h);
+    const rw = Math.abs(rect.w);
+    const rh = Math.abs(rect.h);
 
-      // Reveal selected region
-      ctx.save();
-      ctx.translate(cw / 2, ch / 2);
-      ctx.rotate((rotation * Math.PI) / 180);
-      ctx.drawImage(img, -cw / 2, -ch / 2, cw, ch);
-      ctx.restore();
-      ctx.globalCompositeOperation = 'destination-in';
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(rx, ry, rw, rh);
-      ctx.globalCompositeOperation = 'source-over';
+    // Soft 30% dim outside selection
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx.fillRect(0, 0, cw, ch);
 
-      // Dashed selection border
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth   = 1.5;
-      ctx.setLineDash([5, 4]);
-      ctx.strokeRect(rx, ry, rw, rh);
-      ctx.setLineDash([]);
+    // Restore crisp image inside selection
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rx, ry, rw, rh);
+    ctx.clip();
+    ctx.translate(cw/2, ch/2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.drawImage(img, -cw/2, -ch/2, cw, ch);
+    ctx.restore();
 
-      // Re-draw the dim on top but cut out selection
-      ctx.save();
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(0, 0, cw, ch);
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(rx, ry, rw, rh);
-      ctx.restore();
-      ctx.globalCompositeOperation = 'source-over';
+    // Dashed white border
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(rx, ry, rw, rh);
+    ctx.setLineDash([]);
 
-      // Redraw image in selection area only
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(rx, ry, rw, rh);
-      ctx.clip();
-      ctx.translate(cw / 2, ch / 2);
-      ctx.rotate((rotation * Math.PI) / 180);
-      ctx.drawImage(img, -cw / 2, -ch / 2, cw, ch);
-      ctx.restore();
+    // Corner handles
+    ctx.fillStyle = '#fff';
+    [[rx,ry],[rx+rw,ry],[rx,ry+rh],[rx+rw,ry+rh]].forEach(([hx,hy]) => {
+      ctx.fillRect(hx-4, hy-4, 8, 8);
+    });
 
-      // Dashed border again on top
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([5, 4]);
-      ctx.strokeRect(rx, ry, rw, rh);
-      ctx.setLineDash([]);
-
-      // Corner handles
-      ctx.fillStyle = '#fff';
-      [[rx,ry],[rx+rw,ry],[rx,ry+rh],[rx+rw,ry+rh]].forEach(([hx,hy]) => {
-        ctx.fillRect(hx - 4, hy - 4, 8, 8);
-      });
-
-      // Position tooltip just below selection
-      positionTooltip(rx, ry, rw, rh);
-    }
+    positionCropTooltip(rx, ry, rw, rh);
   }
 
-  function positionTooltip(rx, ry, rw, rh) {
-    if (!cropTooltip || !cropCanvas) return;
-    const canvasRect = cropCanvas.getBoundingClientRect();
-    const editorRect = cropEditor.getBoundingClientRect();
-    const scaleX = canvasRect.width  / cropCanvas.width;
-    const scaleY = canvasRect.height / cropCanvas.height;
-
-    // Position below selection, centred
-    let left = canvasRect.left - editorRect.left + (rx + rw / 2) * scaleX;
-    let top  = canvasRect.top  - editorRect.top  + (ry + rh) * scaleY + 10;
-
-    // Keep within editor
-    const tw = 200;
-    left = Math.max(8, Math.min(left - tw / 2, editorRect.width - tw - 8));
-    top  = Math.min(top, editorRect.height - 100);
-
+  function positionCropTooltip(rx, ry, rw, rh) {
+    if (!cropTooltip || !cropCanvas || !cropSection) return;
+    const cr = cropCanvas.getBoundingClientRect();
+    const sr = cropSection.getBoundingClientRect();
+    const sx = cr.width  / cropCanvas.width;
+    const sy = cr.height / cropCanvas.height;
+    let left = cr.left - sr.left + (rx + rw/2) * sx;
+    let top  = cr.top  - sr.top  + (ry + rh)   * sy + 12;
+    const tw = 220;
+    left = Math.max(8, Math.min(left - tw/2, sr.width - tw - 8));
+    top  = Math.min(top, sr.height - 100);
     cropTooltip.style.left = left + 'px';
     cropTooltip.style.top  = top  + 'px';
     cropTooltip.classList.remove('hidden');
   }
 
-  // Canvas drag events
+  // Mouse events
   cropCanvas?.addEventListener('mousedown', e => {
-    const p = canvasPos(e);
-    cs.dragging = true; cs.startX = p.x; cs.startY = p.y;
-    cs.rect = { x:p.x, y:p.y, w:0, h:0 };
+    const p = cpPos(e);
+    cs.dragging=true; cs.startX=p.x; cs.startY=p.y;
+    cs.rect={x:p.x, y:p.y, w:0, h:0};
     cropHint?.classList.add('hidden');
     cropTooltip?.classList.add('hidden');
+    document.getElementById('crop-text-bar')?.classList.add('hidden');
     e.preventDefault();
   });
   cropCanvas?.addEventListener('mousemove', e => {
     if (!cs.dragging) return;
-    const p = canvasPos(e);
-    cs.rect = { x:cs.startX, y:cs.startY, w:p.x - cs.startX, h:p.y - cs.startY };
-    redrawEditor();
+    const p = cpPos(e);
+    cs.rect={x:cs.startX, y:cs.startY, w:p.x-cs.startX, h:p.y-cs.startY};
+    redrawCrop();
   });
-  cropCanvas?.addEventListener('mouseup',    () => finishDrag());
-  cropCanvas?.addEventListener('mouseleave', () => { if (cs.dragging) finishDrag(); });
+  cropCanvas?.addEventListener('mouseup',    () => finishCropDrag());
+  cropCanvas?.addEventListener('mouseleave', () => { if (cs.dragging) finishCropDrag(); });
 
+  // Touch events
   cropCanvas?.addEventListener('touchstart', e => {
-    const p = canvasPos(e.touches[0]);
-    cs.dragging = true; cs.startX = p.x; cs.startY = p.y;
-    cs.rect = { x:p.x, y:p.y, w:0, h:0 };
+    const p = cpPos(e.touches[0]);
+    cs.dragging=true; cs.startX=p.x; cs.startY=p.y;
+    cs.rect={x:p.x, y:p.y, w:0, h:0};
     cropHint?.classList.add('hidden');
     cropTooltip?.classList.add('hidden');
     e.preventDefault();
-  }, { passive:false });
+  }, {passive:false});
   cropCanvas?.addEventListener('touchmove', e => {
     if (!cs.dragging) return;
-    const p = canvasPos(e.touches[0]);
-    cs.rect = { x:cs.startX, y:cs.startY, w:p.x - cs.startX, h:p.y - cs.startY };
-    redrawEditor();
+    const p = cpPos(e.touches[0]);
+    cs.rect={x:cs.startX, y:cs.startY, w:p.x-cs.startX, h:p.y-cs.startY};
+    redrawCrop();
     e.preventDefault();
-  }, { passive:false });
-  cropCanvas?.addEventListener('touchend', () => finishDrag());
+  }, {passive:false});
+  cropCanvas?.addEventListener('touchend', () => finishCropDrag());
 
-  function finishDrag() {
+  function finishCropDrag() {
     cs.dragging = false;
-    if (cs.rect && Math.abs(cs.rect.w) > 10 && Math.abs(cs.rect.h) > 10) {
-      positionTooltip(
-        Math.min(cs.rect.x, cs.rect.x + cs.rect.w),
-        Math.min(cs.rect.y, cs.rect.y + cs.rect.h),
-        Math.abs(cs.rect.w), Math.abs(cs.rect.h)
-      );
-    }
+    const {rect} = cs;
+    if (!rect || Math.abs(rect.w) < 10 || Math.abs(rect.h) < 10) return;
+    showTextBar();
   }
 
-  // "Identify font" button in tooltip
-  cropConfirm?.addEventListener('click', () => {
-    const { img, rect, scale, rotation } = cs;
+  async function showTextBar() {
+    const {img, rect, scale, rotation} = cs;
     if (!rect || !img) return;
 
-    const rx = Math.round(Math.min(rect.x, rect.x + rect.w) / scale);
-    const ry = Math.round(Math.min(rect.y, rect.y + rect.h) / scale);
+    const rx = Math.round(Math.min(rect.x, rect.x+rect.w) / scale);
+    const ry = Math.round(Math.min(rect.y, rect.y+rect.h) / scale);
     const rw = Math.round(Math.abs(rect.w) / scale);
     const rh = Math.round(Math.abs(rect.h) / scale);
 
+    // Crop to offscreen canvas
     const off = document.createElement('canvas');
-    off.width = rw; off.height = rh;
-    const ctx = off.getContext('2d');
+    off.width=rw; off.height=rh;
+    const oc = off.getContext('2d');
+    oc.save();
+    oc.translate(rw/2 - rx, rh/2 - ry);
+    oc.rotate((rotation * Math.PI) / 180);
+    oc.drawImage(img, -img.naturalWidth/2, -img.naturalHeight/2);
+    oc.restore();
+    _croppedDataURL = off.toDataURL('image/png');
 
-    // Apply rotation then crop
-    ctx.save();
-    ctx.translate(rw / 2 - rx, rh / 2 - ry);
-    ctx.rotate((rotation * Math.PI) / 180);
-    ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
-    ctx.restore();
+    // Draw thumbnail
+    const thumbCanvas = document.getElementById('crop-thumb-canvas');
+    if (thumbCanvas) {
+      const maxT = 80;
+      const ts = Math.min(maxT/rw, maxT/rh, 1);
+      thumbCanvas.width  = Math.max(1, Math.round(rw * ts));
+      thumbCanvas.height = Math.max(1, Math.round(rh * ts));
+      thumbCanvas.getContext('2d').drawImage(off, 0, 0, thumbCanvas.width, thumbCanvas.height);
+    }
+
+    const textBar   = document.getElementById('crop-text-bar');
+    const statusEl  = document.getElementById('crop-ocr-status');
+    const textInput = document.getElementById('crop-text-input');
+    textBar?.classList.remove('hidden');
+    if (statusEl)  statusEl.textContent = 'Detecting text…';
+    if (textInput) textInput.value = '';
+
+    // Lazy-load Tesseract.js for OCR
+    try {
+      const { createWorker } = await import('tesseract.js');
+      const worker = await createWorker('eng', 1, { logger: () => {} });
+      const { data } = await worker.recognize(off);
+      await worker.terminate();
+      const detected = data.text.trim().replace(/\s+/g, ' ').slice(0, 80);
+      if (statusEl)  statusEl.textContent = detected ? 'Detected — edit if needed:' : 'No text detected — type manually:';
+      if (textInput && detected) textInput.value = detected;
+    } catch {
+      if (statusEl) statusEl.textContent = 'Type the text you see:';
+    }
+  }
+
+  document.getElementById('crop-identify-btn')?.addEventListener('click', () => {
+    const textInput = document.getElementById('crop-text-input');
+    submitCrop(textInput?.value?.trim() || '');
+  });
+
+  // "Identify font" in tooltip → show text bar first
+  cropConfirm?.addEventListener('click', () => showTextBar());
+
+  function submitCrop(detectedText) {
+    const {img, rect, scale, rotation} = cs;
+    if (!img) return;
+
+    const rx = rect ? Math.round(Math.min(rect.x, rect.x+rect.w) / scale) : 0;
+    const ry = rect ? Math.round(Math.min(rect.y, rect.y+rect.h) / scale) : 0;
+    const rw = rect ? Math.round(Math.abs(rect.w) / scale) : img.naturalWidth;
+    const rh = rect ? Math.round(Math.abs(rect.h) / scale) : img.naturalHeight;
+
+    const off = document.createElement('canvas');
+    off.width=rw; off.height=rh;
+    const oc = off.getContext('2d');
+    oc.save();
+    oc.translate(rw/2-rx, rh/2-ry);
+    oc.rotate((rotation * Math.PI) / 180);
+    oc.drawImage(img, -img.naturalWidth/2, -img.naturalHeight/2);
+    oc.restore();
 
     off.toBlob(blob => {
       if (!blob) return;
-      const file = new File([blob], 'cropped.png', { type: 'image/png' });
-      window._ff.file = file; window._ff.urlMode = false;
-      previewImg.src = URL.createObjectURL(blob);
+      window._ff.file         = new File([blob], 'cropped.png', {type:'image/png'});
+      window._ff.urlMode      = false;
+      window._ff.detectedText = detectedText;
+      window._ff.croppedThumb = _croppedDataURL;
+      previewImg.src          = _croppedDataURL || URL.createObjectURL(blob);
       previewName.textContent = 'Cropped selection';
-      previewSize.textContent = fmtBytes(blob.size) + ' · ready to identify';
-      closeEditor();
+      previewSize.textContent = fmtBytes(blob.size) + ' · ready';
+      closeCropSection();
       document.dispatchEvent(new CustomEvent('ff:submit'));
     }, 'image/png');
-  });
+  }
 
-  function canvasPos(e) {
+  function cpPos(e) {
     const r = cropCanvas.getBoundingClientRect();
     return {
       x: Math.max(0, Math.min(cropCanvas.width,  (e.clientX - r.left) * (cropCanvas.width  / r.width))),
