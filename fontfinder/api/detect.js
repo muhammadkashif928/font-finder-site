@@ -91,17 +91,18 @@ export default async function handler(req, res) {
 
     // Transform ML server response → frontend-friendly format
     const fonts = (data.matches || []).map((m, i) => {
-      const family      = m.font_name || m.name || "Unknown";
-      const familySlug  = family.toLowerCase().replace(/\s+/g, "+");
-      const gfontsUrl   = `https://fonts.google.com/specimen/${encodeURIComponent(family)}`;
+      const name        = m.font_name   || m.name   || "Unknown";
+      const googleFamily= m.font_family || m.family || name;
+      const gfontsUrl   = `https://fonts.google.com/specimen/${encodeURIComponent(name)}`;
 
       return {
-        name:           family,
-        family:         m.font_family || m.family || "",
-        category:       m.category    || "sans-serif",
-        is_free:        m.is_free     ?? true,
-        license:        m.license     || "OFL",
-        confidence:     m.confidence  || 0,
+        name,
+        googleFamily,
+        family:         googleFamily,
+        category:       m.category   || "sans-serif",
+        is_free:        m.is_free    ?? true,
+        license:        m.license    || "OFL",
+        confidence:     m.confidence || 0,
         rank:           i + 1,
         purchase_links: [
           {
@@ -111,7 +112,7 @@ export default async function handler(req, res) {
             icon:  "fa-brands fa-google",
           },
           {
-            url:   `https://www.myfonts.com/search?query=${encodeURIComponent(family)}`,
+            url:   `https://www.myfonts.com/search?query=${encodeURIComponent(name)}`,
             label: "Find on MyFonts",
             type:  "paid",
             icon:  "fa-tag",
@@ -123,6 +124,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success:       true,
       fonts,
+      detected_text: data.detected_text || "",
       processing_ms: data.processing_ms,
     });
 

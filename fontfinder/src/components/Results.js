@@ -1,17 +1,25 @@
 /* ============================================================
-   Results Component — Loading · Error · Font Cards · Alternatives
+   Results Component — Professional font results with live preview
    ============================================================ */
+
+const DEFAULT_PREVIEW = 'The quick brown fox';
+let _previewText  = DEFAULT_PREVIEW;
+let _previewSize  = 48;
+let _viewMode     = 'list';      // 'list' | 'grid'
+let _currentFonts = [];
+let _loadedFonts  = new Set();
+let _detectedWord = '';
 
 export function render() {
   return `
     <div id="results-root" style="display:none">
-      <section class="results container" id="results-section">
+      <div class="results-wrap" id="results-wrap">
 
         <!-- Loading -->
         <div class="results-state results-state--loading hidden" id="r-loading">
           <div class="spinner"></div>
           <p class="results-state__title">Scanning font database…</p>
-          <p class="results-state__sub">Comparing letterforms across 900,000+ fonts</p>
+          <p class="results-state__sub">Comparing letterforms across 3,800+ fonts</p>
         </div>
 
         <!-- Error -->
@@ -24,28 +32,103 @@ export function render() {
           </button>
         </div>
 
-        <!-- Results -->
-        <div id="r-content" class="hidden">
-          <div class="results__header">
-            <div>
-              <h2 class="results__title">Detected Fonts</h2>
-              <p class="results__sub">Ranked by confidence — best match first</p>
+        <!-- Results layout -->
+        <div id="r-content" class="r-layout hidden">
+
+          <!-- Sidebar -->
+          <aside class="r-sidebar">
+            <div class="r-sidebar__head">Filters</div>
+
+            <!-- Category filter -->
+            <div class="r-filter">
+              <div class="r-filter__title" data-filter="category">
+                Category <i class="fa fa-chevron-up r-filter__arrow"></i>
+              </div>
+              <div class="r-filter__body" id="filter-category">
+                ${['All','Serif','Sans-Serif','Script','Display','Monospace'].map(c => `
+                  <label class="r-filter__option">
+                    <input type="checkbox" class="r-filter__check" data-cat="${c}" ${c==='All'?'checked':''}>
+                    <span>${c}</span>
+                  </label>`).join('')}
+              </div>
             </div>
-            <button class="btn btn-ghost" id="r-new">
-              <i class="fa fa-redo"></i> New Search
+
+            <!-- License filter -->
+            <div class="r-filter">
+              <div class="r-filter__title" data-filter="license">
+                License <i class="fa fa-chevron-up r-filter__arrow"></i>
+              </div>
+              <div class="r-filter__body" id="filter-license">
+                ${['All','Free','OFL','Apache'].map(l => `
+                  <label class="r-filter__option">
+                    <input type="checkbox" class="r-filter__check" data-lic="${l}" ${l==='All'?'checked':''}>
+                    <span>${l}</span>
+                  </label>`).join('')}
+              </div>
+            </div>
+
+            <button class="r-sidebar__back" id="r-new">
+              <i class="fa fa-arrow-left"></i> Back to Image
             </button>
-          </div>
+          </aside>
 
-          <div class="results__cards" id="r-cards"></div>
+          <!-- Main results -->
+          <main class="r-main">
 
-          <!-- Free Alternatives -->
-          <div id="r-alts" class="hidden">
-            <div class="divider">Free Alternatives on Google Fonts</div>
-            <div class="alts__grid" id="r-alts-grid"></div>
-          </div>
+            <!-- Results header bar -->
+            <div class="r-header">
+              <div class="r-header__left">
+                <span class="r-header__label">Results for</span>
+                <span class="r-header__word" id="r-detected-word"></span>
+                <span class="r-header__count" id="r-count"></span>
+              </div>
+              <div class="r-header__controls">
+                <!-- Preview text input -->
+                <div class="r-preview-input-wrap">
+                  <input
+                    type="text"
+                    id="r-preview-text"
+                    class="r-preview-input"
+                    placeholder="Type to preview…"
+                    maxlength="60"
+                  >
+                </div>
+
+                <!-- Font size -->
+                <div class="r-size-control">
+                  <select id="r-size-select" class="r-size-select">
+                    <option value="24">24px</option>
+                    <option value="32">32px</option>
+                    <option value="48" selected>48px</option>
+                    <option value="64">64px</option>
+                    <option value="96">96px</option>
+                  </select>
+                </div>
+
+                <!-- Reset preview -->
+                <button class="r-icon-btn" id="r-reset-preview" title="Reset preview text">
+                  <i class="fa fa-rotate-left"></i>
+                </button>
+
+                <!-- View toggle -->
+                <div class="r-view-toggle">
+                  <button class="r-view-btn" id="r-view-grid" title="Grid view">
+                    <i class="fa fa-grid-2"></i>
+                  </button>
+                  <button class="r-view-btn r-view-btn--active" id="r-view-list" title="List view">
+                    <i class="fa fa-list"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Font results list -->
+            <div id="r-cards" class="r-cards r-cards--list"></div>
+
+          </main>
         </div>
 
-      </section>
+      </div>
     </div>
   `;
 }
@@ -65,10 +148,7 @@ export function init() {
 export function showLoading() {
   const root = document.getElementById('results-root');
   root.style.display = 'block';
-
   setState('loading');
-
-  // Scroll after next paint
   requestAnimationFrame(() =>
     root.scrollIntoView({ behavior: 'smooth', block: 'start' })
   );
@@ -81,14 +161,188 @@ export function showError(msg) {
 }
 
 export function showResults(data) {
+  _currentFonts = data.fonts || [];
+  _detectedWord = data.detected_text || '';
+
+  // Set preview text to detected word if available, else font name
+  _previewText = _detectedWord || DEFAULT_PREVIEW;
+
   setState('content');
-  renderCards(data.fonts);
-  if (data.google_alternatives?.length) renderAlts(data.google_alternatives);
-  document.getElementById('r-content').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setupControls();
+  renderAllCards();
+
+  // Update header
+  const wordEl  = document.getElementById('r-detected-word');
+  const countEl = document.getElementById('r-count');
+  if (wordEl)  wordEl.textContent  = _detectedWord  || 'your text';
+  if (countEl) countEl.textContent = `${_currentFonts.length} fonts`;
+
+  // Set preview input value
+  const inp = document.getElementById('r-preview-text');
+  if (inp) inp.value = _previewText;
+
+  document.getElementById('results-root').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 export function hide() {
   document.getElementById('results-root').style.display = 'none';
+}
+
+// ── Controls setup ────────────────────────────────────────────
+function setupControls() {
+  // Preview text
+  const inp = document.getElementById('r-preview-text');
+  inp?.addEventListener('input', () => {
+    _previewText = inp.value || DEFAULT_PREVIEW;
+    updateAllPreviews();
+  });
+
+  // Reset preview
+  document.getElementById('r-reset-preview')?.addEventListener('click', () => {
+    _previewText = _detectedWord || DEFAULT_PREVIEW;
+    if (inp) inp.value = _previewText;
+    updateAllPreviews();
+  });
+
+  // Font size
+  const sizeSelect = document.getElementById('r-size-select');
+  sizeSelect?.addEventListener('change', () => {
+    _previewSize = parseInt(sizeSelect.value);
+    updateAllPreviews();
+  });
+
+  // View toggle
+  document.getElementById('r-view-grid')?.addEventListener('click', () => setView('grid'));
+  document.getElementById('r-view-list')?.addEventListener('click', () => setView('list'));
+
+  // Filter chevrons
+  document.querySelectorAll('.r-filter__title').forEach(title => {
+    title.addEventListener('click', () => {
+      const filterId = 'filter-' + title.dataset.filter;
+      const body     = document.getElementById(filterId);
+      const arrow    = title.querySelector('.r-filter__arrow');
+      if (!body) return;
+      const open = !body.classList.contains('hidden');
+      body.classList.toggle('hidden', open);
+      arrow?.classList.toggle('fa-chevron-up',   !open);
+      arrow?.classList.toggle('fa-chevron-down',  open);
+    });
+  });
+}
+
+function setView(mode) {
+  _viewMode = mode;
+  const grid = document.getElementById('r-cards');
+  if (!grid) return;
+  grid.className = `r-cards r-cards--${mode}`;
+  document.getElementById('r-view-grid')?.classList.toggle('r-view-btn--active', mode === 'grid');
+  document.getElementById('r-view-list')?.classList.toggle('r-view-btn--active', mode === 'list');
+}
+
+function updateAllPreviews() {
+  document.querySelectorAll('.r-card__preview-text').forEach(el => {
+    el.textContent   = _previewText;
+    el.style.fontSize = _previewSize + 'px';
+  });
+}
+
+// ── Card rendering ────────────────────────────────────────────
+function renderAllCards() {
+  const grid = document.getElementById('r-cards');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  const fontFamiliesToLoad = [];
+
+  _currentFonts.forEach((font, i) => {
+    const card = buildCard(font, i);
+    grid.appendChild(card);
+
+    if (font.googleFamily && !_loadedFonts.has(font.googleFamily)) {
+      fontFamiliesToLoad.push(font.googleFamily);
+      _loadedFonts.add(font.googleFamily);
+    }
+
+    // Trigger entrance animation
+    requestAnimationFrame(() => setTimeout(() => card.classList.add('visible'), i * 60));
+  });
+
+  // Load all fonts in one batch API call
+  if (fontFamiliesToLoad.length) {
+    const families = fontFamiliesToLoad
+      .map(f => `family=${encodeURIComponent(f)}:wght@400;700`)
+      .join('&');
+    const link = document.createElement('link');
+    link.rel  = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
+    document.head.appendChild(link);
+  }
+}
+
+function buildCard(font, i) {
+  const isTop      = i === 0;
+  const confidence = font.confidence ? Math.round(font.confidence) : null;
+  const family     = font.googleFamily || font.name;
+  const fontStyle  = family ? `font-family:'${family}',serif;` : '';
+  const downloadUrl= `/api/download?family=${encodeURIComponent((family || font.name).split(':')[0].split('[')[0].trim())}`;
+
+  const confidenceBadge = confidence ? `
+    <span class="r-card__conf ${isTop ? 'r-card__conf--top' : ''}">
+      ${isTop ? '<i class="fa fa-star"></i> ' : ''}${confidence}% match
+    </span>` : '';
+
+  const card = document.createElement('div');
+  card.className = 'r-card anim-up';
+  card.dataset.fontId = font.name;
+
+  card.innerHTML = `
+    <div class="r-card__inner ${isTop ? 'r-card--top' : ''}">
+
+      <!-- Card header -->
+      <div class="r-card__head">
+        <div class="r-card__meta">
+          <div class="r-card__name-row">
+            <h3 class="r-card__name">${e(font.name)}</h3>
+            ${confidenceBadge}
+          </div>
+          <p class="r-card__detail">
+            ${font.category ? `<span class="r-card__cat">${e(capitalize(font.category))}</span>` : ''}
+            ${font.license  ? `<span class="r-card__license">${e(font.license)}</span>` : ''}
+          </p>
+        </div>
+        <div class="r-card__actions">
+          <span class="r-card__price">Free</span>
+          <a href="${downloadUrl}" class="r-card__get-btn" download>
+            <i class="fa fa-download"></i> Download Font
+          </a>
+        </div>
+      </div>
+
+      <!-- Live font preview — big and beautiful -->
+      <div class="r-card__preview" style="${fontStyle}">
+        <span class="r-card__preview-text"
+          style="${fontStyle} font-size:${_previewSize}px"
+        >${e(_previewText)}</span>
+      </div>
+
+      <!-- Confidence bar -->
+      ${confidence ? `
+        <div class="r-card__conf-bar-wrap">
+          <div class="r-card__conf-bar" style="width:${confidence}%"></div>
+        </div>` : ''}
+
+      <!-- Find links -->
+      <div class="r-card__links">
+        ${font.purchase_links?.map(l => `
+          <a href="${e(l.url)}" target="_blank" rel="noopener" class="r-card__link r-card__link--${l.type || 'free'}">
+            <i class="fa ${l.icon || 'fa-external-link-alt'}"></i>
+            ${e(l.label)}
+          </a>`).join('') || ''}
+      </div>
+
+    </div>`;
+
+  return card;
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -100,76 +354,11 @@ function setState(which) {
   document.getElementById(map[which])?.classList.remove('hidden');
 }
 
-function renderCards(fonts) {
-  const grid = document.getElementById('r-cards');
-  grid.innerHTML = '';
-  fonts.forEach((font, i) => {
-    const card = document.createElement('div');
-    card.className = 'r-card anim-up';
-    card.style.transitionDelay = `${i * 0.08}s`;
-
-    const isTop  = i === 0;
-    const isFree = font.is_free;
-
-    const badges = `
-      ${isTop  ? '<span class="badge badge-best"><i class="fa fa-star" aria-hidden="true"></i> Best Match</span>' : ''}
-      ${isFree ? '<span class="badge badge-free">Free</span>' : '<span class="badge badge-paid">Commercial</span>'}
-    `;
-
-    const preview = font.preview_image
-      ? `<img src="${e(font.preview_image)}" alt="${e(font.name)} preview" class="r-card__preview" onerror="this.remove()">`
-      : '';
-
-    const typeColors = { paid:'link-paid', subscription:'link-sub', free:'link-free' };
-    const typeIcons  = { tag:'fa-tag', adobe:'fa-brands fa-adobe', store:'fa-store', leaf:'fa-leaf', google:'fa-brands fa-google' };
-
-    const links = font.purchase_links.map(l => `
-      <a href="${e(l.url)}" target="_blank" rel="noopener sponsored"
-         class="r-card__link ${typeColors[l.type]||'link-paid'}">
-        <i class="fa ${typeIcons[l.icon]||'fa-external-link-alt'}"></i>
-        ${e(l.label)}
-      </a>`).join('');
-
-    card.innerHTML = `
-      <div class="r-card__inner ${isTop ? 'r-card--top' : ''}">
-        <div class="r-card__head">
-          <div>
-            <h3 class="r-card__name">${e(font.name)}</h3>
-            ${font.family ? `<p class="r-card__family">${e(font.family)}</p>` : ''}
-            ${font.category ? `<p class="r-card__cat"><i class="fa fa-tag" aria-hidden="true"></i> ${e(font.category)}</p>` : ''}
-          </div>
-          <div class="r-card__badges">${badges}</div>
-        </div>
-        ${preview}
-        <div class="r-card__links">
-          <p class="r-card__links-label">Find this font</p>
-          <div class="r-card__links-row">${links}</div>
-        </div>
-      </div>`;
-
-    grid.appendChild(card);
-
-    // Trigger animation
-    requestAnimationFrame(() => setTimeout(() => card.classList.add('visible'), 50));
-  });
-}
-
-function renderAlts(alts) {
-  const grid = document.getElementById('r-alts-grid');
-  grid.innerHTML = '';
-  alts.forEach(f => {
-    grid.innerHTML += `
-      <a href="${e(f.url)}" target="_blank" rel="noopener"
-         class="alt-card">
-        <div class="alt-card__icon"><i class="fa-brands fa-google"></i></div>
-        <span class="alt-card__name">${e(f.name)}</span>
-        <i class="fa fa-arrow-right alt-card__arrow"></i>
-      </a>`;
-  });
-  document.getElementById('r-alts').classList.remove('hidden');
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 function e(s) {
   if (!s) return '';
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
