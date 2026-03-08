@@ -328,14 +328,16 @@ export function init() {
   function handleFile(file) {
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) return alert('Please use JPG, PNG, GIF, or WebP.');
-    if (file.size > 4 * 1024 * 1024) return alert('File too large — max 4MB.');
+    if (file.size > 5 * 1024 * 1024) return alert('File too large — max 5MB.');
     window._ff = { file, urlMode: false };
     const reader = new FileReader();
-    reader.onload = e => {
-      previewImg.src = e.target.result;
+    reader.onload = ev => {
+      previewImg.src = ev.target.result;
       previewName.textContent = file.name;
       previewSize.textContent = fmtBytes(file.size) + ' · ready to identify';
       showTool();
+      // Auto-open crop editor immediately
+      openEditorFromSrc(ev.target.result);
     };
     reader.readAsDataURL(file);
   }
@@ -400,6 +402,22 @@ export function init() {
     if (f) { handleFile(f); }
   });
 
+  function openEditorFromSrc(src) {
+    const img = new Image();
+    img.onload = () => {
+      cs = { dragging:false, startX:0, startY:0, rect:null, img, scale:1, rotation:0 };
+      if (cropRotate) cropRotate.value = 0;
+      cropTooltip?.classList.add('hidden');
+      cropHint?.classList.remove('hidden');
+      // Show editor first so clientWidth is available
+      cropEditor?.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      // Wait for layout then size canvas
+      requestAnimationFrame(() => requestAnimationFrame(() => setupEditorCanvas(img)));
+    };
+    img.src = src;
+  }
+
   // Rotate
   cropRotate?.addEventListener('input', () => {
     cs.rotation = parseInt(cropRotate.value);
@@ -427,18 +445,8 @@ export function init() {
 
   function openEditor() {
     const src = previewImg.src;
-    if (!src) return;
-    const img = new Image();
-    img.onload = () => {
-      cs = { dragging:false, startX:0, startY:0, rect:null, img, scale:1, rotation:0 };
-      if (cropRotate) cropRotate.value = 0;
-      cropTooltip?.classList.add('hidden');
-      cropHint?.classList.remove('hidden');
-      setupEditorCanvas(img);
-      cropEditor?.classList.remove('hidden');
-      document.body.style.overflow = 'hidden';
-    };
-    img.src = src;
+    if (!src || src === window.location.href) return;
+    openEditorFromSrc(src);
   }
 
   function closeEditor() {
@@ -447,10 +455,9 @@ export function init() {
   }
 
   function setupEditorCanvas(img) {
-    const wrap  = document.getElementById('crop-canvas-wrap');
     const toolbarH = 64;
-    const maxW  = wrap.clientWidth;
-    const maxH  = window.innerHeight - toolbarH - 20;
+    const maxW  = window.innerWidth;
+    const maxH  = window.innerHeight - toolbarH - 8;
     const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
     cropCanvas.width  = Math.round(img.naturalWidth  * scale);
     cropCanvas.height = Math.round(img.naturalHeight * scale);
