@@ -89,9 +89,40 @@ export default async function handler(req, res) {
     if (!mlRes.ok)
       return res.status(mlRes.status).json({ success: false, error: data.detail || "ML service error" });
 
+    // Transform ML server response → frontend-friendly format
+    const fonts = (data.matches || []).map((m, i) => {
+      const family      = m.font_name || m.name || "Unknown";
+      const familySlug  = family.toLowerCase().replace(/\s+/g, "+");
+      const gfontsUrl   = `https://fonts.google.com/specimen/${encodeURIComponent(family)}`;
+
+      return {
+        name:           family,
+        family:         m.font_family || m.family || "",
+        category:       m.category    || "sans-serif",
+        is_free:        m.is_free     ?? true,
+        license:        m.license     || "OFL",
+        confidence:     m.confidence  || 0,
+        rank:           i + 1,
+        purchase_links: [
+          {
+            url:   gfontsUrl,
+            label: "View on Google Fonts",
+            type:  "free",
+            icon:  "fa-brands fa-google",
+          },
+          {
+            url:   `https://www.myfonts.com/search?query=${encodeURIComponent(family)}`,
+            label: "Find on MyFonts",
+            type:  "paid",
+            icon:  "fa-tag",
+          },
+        ],
+      };
+    });
+
     return res.status(200).json({
       success:       true,
-      matches:       data.matches,
+      fonts,
       processing_ms: data.processing_ms,
     });
 
