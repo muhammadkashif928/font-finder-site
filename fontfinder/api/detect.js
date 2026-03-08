@@ -1,44 +1,42 @@
 /**
  * FontFinder — Vercel Serverless Proxy
  * ======================================
- * Routes image uploads to the FontFinder ML service on Google Cloud Run.
- * Zero third-party font API dependencies — 100% our own pipeline.
+ * Uses native Node.js 18 fetch + FormData — no extra npm packages needed.
+ * Forwards image uploads to the FontFinder ML service on Hetzner.
  *
  * Env vars (set in Vercel dashboard):
- *   ML_SERVICE_URL  — Cloud Run URL e.g. https://fontfinder-ml-xxxx-uc.a.run.app
- *   FF_API_SECRET   — must match FF_API_SECRET in Cloud Run service
+ *   ML_SERVICE_URL  — e.g. http://65.109.163.100:8000
+ *   FF_API_SECRET   — must match FF_API_SECRET on the ML server
  */
 
 export const config = { api: { bodyParser: false } };
 
-const ML_URL    = process.env.ML_SERVICE_URL;
-const SECRET    = process.env.FF_API_SECRET || "dev-secret-change-in-production";
-
 export default async function handler(req, res) {
-  // ── CORS ──────────────────────────────────────────────────────────────────
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST")   return res.status(405).json({ success: false, error: "Method not allowed" });
+  if (req.method !== "POST") return res.status(405).json({ success: false, error: "Method not allowed" });
 
-  // ── ML service configured? ─────────────────────────────────────────────────
+  const ML_URL = process.env.ML_SERVICE_URL;
+  const SECRET = process.env.FF_API_SECRET || "dev-secret-change-in-production";
+
   if (!ML_URL) {
     return res.status(503).json({
       success: false,
-      error: "ML service not configured yet. Set ML_SERVICE_URL in Vercel environment variables."
+      error: "ML service not configured. Set ML_SERVICE_URL in Vercel environment variables."
     });
   }
 
   try {
+    // Read raw body
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
-    const rawBody    = Buffer.concat(chunks);
+    const rawBody     = Buffer.concat(chunks);
     const contentType = req.headers["content-type"] || "";
 
     let imageBuffer, filename, mimeType;
 
-    // ── File upload (multipart) ──────────────────────────────────────────────
     if (contentType.includes("multipart/form-data")) {
       const { Formidable } = await import("formidable");
       const form = new Formidable({ maxFileSize: 5 * 1024 * 1024 });
@@ -50,12 +48,11 @@ export default async function handler(req, res) {
       const file = files.image?.[0] || files.file?.[0];
       if (!file) return res.status(400).json({ success: false, error: "No image file uploaded." });
 
-      const fs = await import("fs/promises");
+      const fs   = await import("fs/promises");
       imageBuffer = await fs.readFile(file.filepath);
       filename    = file.originalFilename || "upload.jpg";
       mimeType    = file.mimetype || "image/jpeg";
 
-    // ── URL mode (JSON body) ─────────────────────────────────────────────────
     } else if (contentType.includes("application/json")) {
       const { url } = JSON.parse(rawBody.toString());
       if (!url?.match(/^https?:\/\//)) {
@@ -71,21 +68,31 @@ export default async function handler(req, res) {
       return res.status(415).json({ success: false, error: "Unsupported content type." });
     }
 
-    // ── Forward to Cloud Run ML service ─────────────────────────────────────
-    const { default: FormData } = await import("form-data");
-    const { default: fetch2 }   = await import("node-fetch");
+    // Build FormData using native FormData (Node 18+)
+    const formData = new FormData();
+    const blob     = new Blob([imageBuffer], { type: mimeType });
+    formData.append("file", blob, filename);
 
-    const form = new FormData();
-    form.append("file", imageBuffer, { filename, contentType: mimeType });
-
-    const mlRes = await fetch2(`${ML_URL}/identify`, {
+    // Forward to ML server
+    const mlRes = await fetch(`${ML_URL}/identify`, {
       method:  "POST",
-      headers: { ...form.getHeaders(), "X-API-Key": SECRET },
-      body:    form,
-      timeout: 30_000,
+      headers: { "X-API-Key": SECRET },
+      body:    formData,
+      signal:  AbortSignal.timeout(30_000),
     });
 
-    const data = await mlRes.json();
+    const text = await mlRes.text();
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error("ML server non-JSON response:", text.slice(0, 300));
+      return res.status(502).json({
+        success: false,
+        error: "ML server returned unexpected response. Please try again."
+      });
+    }
 
     if (!mlRes.ok) {
       return res.status(mlRes.status).json({
