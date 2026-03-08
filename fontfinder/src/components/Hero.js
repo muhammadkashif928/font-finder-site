@@ -458,13 +458,13 @@ export function init() {
     openEditorFromSrc(src, previewName?.textContent || '');
   }
 
-  function closeCropSection() {
+  function closeCropSection(silent = false) {
     cropSection?.classList.add('hidden');
     document.getElementById('hero-ctas')?.classList.remove('hidden');
     document.getElementById('hero-tips')?.classList.remove('hidden');
     document.getElementById('hero-drag-hint')?.classList.remove('hidden');
     document.querySelector('.hero__right')?.classList.remove('hidden');
-    reset();
+    if (!silent) reset();
   }
 
   cropRotate?.addEventListener('input', () => {
@@ -720,7 +720,7 @@ export function init() {
       previewImg.src          = _croppedDataURL || URL.createObjectURL(blob);
       previewName.textContent = 'Cropped selection';
       previewSize.textContent = fmtBytes(blob.size) + ' · ready';
-      closeCropSection();
+      closeCropSection(true); // silent — don't reset window._ff
       document.dispatchEvent(new CustomEvent('ff:submit'));
     }, 'image/png');
   }
