@@ -87,11 +87,17 @@ export function render() {
               </button>
             </div>
 
-            <!-- Identify button -->
-            <button class="hero__identify-btn" id="submit-btn">
-              <i class="fa fa-magnifying-glass"></i>
-              Identify Font Now
-            </button>
+            <!-- Crop + Identify buttons -->
+            <div class="hero__action-row">
+              <button class="hero__crop-btn" id="crop-btn">
+                <i class="fa fa-crop-simple"></i>
+                Crop Selection
+              </button>
+              <button class="hero__identify-btn" id="submit-btn">
+                <i class="fa fa-magnifying-glass"></i>
+                Identify Font Now
+              </button>
+            </div>
 
             <p class="hero__tool-note">
               <i class="fa fa-lock"></i>
@@ -184,6 +190,37 @@ export function render() {
         </div>
         <!-- end right -->
 
+      </div>
+
+      <!-- ── Crop Modal ──────────────────────────────────── -->
+      <div class="crop-modal hidden" id="crop-modal" role="dialog" aria-modal="true" aria-label="Crop image">
+        <div class="crop-modal__backdrop" id="crop-backdrop"></div>
+        <div class="crop-modal__box">
+          <div class="crop-modal__head">
+            <div>
+              <h3 class="crop-modal__title"><i class="fa fa-crop-simple"></i> Select Text Area</h3>
+              <p class="crop-modal__sub">Draw a box around the text or word you want to identify</p>
+            </div>
+            <button class="crop-modal__close" id="crop-close" aria-label="Close">
+              <i class="fa fa-xmark"></i>
+            </button>
+          </div>
+          <div class="crop-modal__canvas-wrap" id="crop-canvas-wrap">
+            <canvas id="crop-canvas"></canvas>
+            <div class="crop-modal__hint" id="crop-hint">
+              <i class="fa fa-hand-pointer"></i> Click and drag to select the text area
+            </div>
+          </div>
+          <div class="crop-modal__footer">
+            <div class="crop-modal__selection-info" id="crop-info"></div>
+            <div class="crop-modal__actions">
+              <button class="btn btn-ghost" id="crop-cancel">Use Full Image</button>
+              <button class="hero__identify-btn crop-modal__confirm hidden" id="crop-confirm">
+                <i class="fa fa-crop-simple"></i> Crop &amp; Identify
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Bottom bar -->
@@ -315,4 +352,210 @@ export function init() {
   }
 
   window._ff.reset = reset;
+
+  // ── Crop feature ─────────────────────────────────────────
+  const cropBtn     = document.getElementById('crop-btn');
+  const cropModal   = document.getElementById('crop-modal');
+  const cropClose   = document.getElementById('crop-close');
+  const cropCancel  = document.getElementById('crop-cancel');
+  const cropConfirm = document.getElementById('crop-confirm');
+  const cropBackdrop= document.getElementById('crop-backdrop');
+  const cropCanvas  = document.getElementById('crop-canvas');
+  const cropHint    = document.getElementById('crop-hint');
+  const cropInfo    = document.getElementById('crop-info');
+
+  let cropState = { dragging: false, startX: 0, startY: 0, rect: null, img: null, scale: 1 };
+
+  cropBtn?.addEventListener('click', openCropper);
+  cropClose?.addEventListener('click', closeCropper);
+  cropBackdrop?.addEventListener('click', closeCropper);
+  cropCancel?.addEventListener('click', () => {
+    closeCropper();
+    document.dispatchEvent(new CustomEvent('ff:submit'));
+  });
+
+  function openCropper() {
+    const src = previewImg.src;
+    if (!src) return;
+    const img = new Image();
+    img.onload = () => {
+      cropState.img  = img;
+      cropState.rect = null;
+      cropConfirm?.classList.add('hidden');
+      cropInfo.textContent = '';
+      cropHint?.classList.remove('hidden');
+      setupCanvas(img);
+      cropModal?.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    };
+    img.src = src;
+  }
+
+  function closeCropper() {
+    cropModal?.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  function setupCanvas(img) {
+    const wrap  = document.getElementById('crop-canvas-wrap');
+    const maxW  = Math.min(wrap.clientWidth - 32, 860);
+    const maxH  = Math.min(window.innerHeight * 0.55, 520);
+    const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+    const cw    = Math.round(img.naturalWidth  * scale);
+    const ch    = Math.round(img.naturalHeight * scale);
+
+    cropCanvas.width  = cw;
+    cropCanvas.height = ch;
+    cropState.scale   = scale;
+
+    drawCanvas();
+  }
+
+  function drawCanvas() {
+    const { img, rect, scale } = cropState;
+    if (!img) return;
+    const ctx = cropCanvas.getContext('2d');
+    const cw  = cropCanvas.width;
+    const ch  = cropCanvas.height;
+
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.drawImage(img, 0, 0, cw, ch);
+
+    if (rect && rect.w !== 0 && rect.h !== 0) {
+      const x = Math.min(rect.x, rect.x + rect.w);
+      const y = Math.min(rect.y, rect.y + rect.h);
+      const w = Math.abs(rect.w);
+      const h = Math.abs(rect.h);
+
+      // Dim outside selection
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.clearRect(x, y, w, h);
+      ctx.drawImage(img, x / scale, y / scale, w / scale, h / scale, x, y, w, h);
+
+      // Border
+      ctx.strokeStyle = '#6366f1';
+      ctx.lineWidth   = 2;
+      ctx.setLineDash([6, 3]);
+      ctx.strokeRect(x, y, w, h);
+
+      // Corner handles
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#6366f1';
+      [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(([hx,hy]) => {
+        ctx.fillRect(hx - 5, hy - 5, 10, 10);
+      });
+
+      // Show dimensions
+      const natW = Math.round(w / scale);
+      const natH = Math.round(h / scale);
+      cropInfo.textContent = `Selection: ${natW} × ${natH}px`;
+    }
+  }
+
+  // Mouse events on canvas
+  cropCanvas?.addEventListener('mousedown', e => {
+    const pos = getCanvasPos(e);
+    cropState.dragging = true;
+    cropState.startX   = pos.x;
+    cropState.startY   = pos.y;
+    cropState.rect     = { x: pos.x, y: pos.y, w: 0, h: 0 };
+    cropHint?.classList.add('hidden');
+    cropConfirm?.classList.add('hidden');
+    e.preventDefault();
+  });
+
+  cropCanvas?.addEventListener('mousemove', e => {
+    if (!cropState.dragging) return;
+    const pos = getCanvasPos(e);
+    cropState.rect = {
+      x: cropState.startX, y: cropState.startY,
+      w: pos.x - cropState.startX, h: pos.y - cropState.startY,
+    };
+    drawCanvas();
+  });
+
+  cropCanvas?.addEventListener('mouseup', () => finishDrag());
+  cropCanvas?.addEventListener('mouseleave', () => { if (cropState.dragging) finishDrag(); });
+
+  // Touch support
+  cropCanvas?.addEventListener('touchstart', e => {
+    const pos = getCanvasPos(e.touches[0]);
+    cropState.dragging = true;
+    cropState.startX   = pos.x;
+    cropState.startY   = pos.y;
+    cropState.rect     = { x: pos.x, y: pos.y, w: 0, h: 0 };
+    cropHint?.classList.add('hidden');
+    e.preventDefault();
+  }, { passive: false });
+
+  cropCanvas?.addEventListener('touchmove', e => {
+    if (!cropState.dragging) return;
+    const pos = getCanvasPos(e.touches[0]);
+    cropState.rect = {
+      x: cropState.startX, y: cropState.startY,
+      w: pos.x - cropState.startX, h: pos.y - cropState.startY,
+    };
+    drawCanvas();
+    e.preventDefault();
+  }, { passive: false });
+
+  cropCanvas?.addEventListener('touchend', () => finishDrag());
+
+  function finishDrag() {
+    cropState.dragging = false;
+    const { rect } = cropState;
+    if (!rect) return;
+    const w = Math.abs(rect.w);
+    const h = Math.abs(rect.h);
+    if (w > 10 && h > 10) {
+      cropConfirm?.classList.remove('hidden');
+    }
+  }
+
+  cropConfirm?.addEventListener('click', () => {
+    const { img, rect, scale } = cropState;
+    if (!rect || !img) return;
+
+    const x = Math.round(Math.min(rect.x, rect.x + rect.w) / scale);
+    const y = Math.round(Math.min(rect.y, rect.y + rect.h) / scale);
+    const w = Math.round(Math.abs(rect.w) / scale);
+    const h = Math.round(Math.abs(rect.h) / scale);
+
+    // Crop using offscreen canvas
+    const offscreen = document.createElement('canvas');
+    offscreen.width  = w;
+    offscreen.height = h;
+    const ctx = offscreen.getContext('2d');
+    ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+
+    offscreen.toBlob(blob => {
+      if (!blob) return;
+      const croppedFile = new File([blob], 'cropped.png', { type: 'image/png' });
+      window._ff.file    = croppedFile;
+      window._ff.urlMode = false;
+
+      // Update preview
+      const reader = new FileReader();
+      reader.onload = e => {
+        previewImg.src = e.target.result;
+        previewName.textContent = 'Cropped selection';
+        previewSize.textContent = fmtBytes(blob.size) + ' · ready to identify';
+      };
+      reader.readAsDataURL(croppedFile);
+
+      closeCropper();
+      document.dispatchEvent(new CustomEvent('ff:submit'));
+    }, 'image/png');
+  });
+
+  function getCanvasPos(e) {
+    const rect = cropCanvas.getBoundingClientRect();
+    const scaleX = cropCanvas.width  / rect.width;
+    const scaleY = cropCanvas.height / rect.height;
+    return {
+      x: Math.max(0, Math.min(cropCanvas.width,  (e.clientX - rect.left) * scaleX)),
+      y: Math.max(0, Math.min(cropCanvas.height, (e.clientY - rect.top)  * scaleY)),
+    };
+  }
 }
