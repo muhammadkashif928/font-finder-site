@@ -6,39 +6,32 @@ export function render() {
   return `
     <section class="hero" id="hero">
 
-      <!-- Ambient glows -->
       <div class="hero__blob hero__blob--1"></div>
       <div class="hero__blob hero__blob--2"></div>
       <div class="hero__blob hero__blob--3"></div>
 
-      <!-- Grid pattern overlay -->
       <div class="hero__grid" aria-hidden="true"></div>
 
       <div class="hero__wrap container">
 
-        <!-- ── LEFT: Text + Tool ────────────────────────── -->
         <div class="hero__left">
 
-          <!-- Eyebrow -->
           <div class="hero__eyebrow">
             <span class="hero__eyebrow-dot"></span>
             Font detection powered by 900K+ database
           </div>
 
-          <!-- Headline -->
           <h1 class="hero__title">
             Identify<br>
             Any Font.<br>
             <span class="hero__title-accent">Instantly.</span>
           </h1>
 
-          <!-- Sub -->
           <p class="hero__sub">
             Drop any image — logo, screenshot, packaging, or ad — and get
             the exact font name, free alternatives, and purchase links in seconds.
           </p>
 
-          <!-- CTA row -->
           <div class="hero__ctas" id="hero-ctas">
             <label class="hero__btn-primary" for="file-input">
               <i class="fa fa-arrow-up-from-bracket"></i>
@@ -56,10 +49,8 @@ export function render() {
             </a>
           </div>
 
-          <!-- Upload tool (shown after file pick) -->
           <div class="hero__tool hidden" id="hero-tool">
 
-            <!-- URL bar -->
             <div class="hero__urlbar" id="hero-urlbar">
               <i class="fa fa-image hero__urlbar-icon"></i>
               <input
@@ -75,7 +66,6 @@ export function render() {
               </button>
             </div>
 
-            <!-- Preview strip -->
             <div class="hero__preview" id="hero-preview">
               <img id="preview-img" src="" alt="Your image preview" />
               <div class="hero__preview-info">
@@ -87,7 +77,6 @@ export function render() {
               </button>
             </div>
 
-            <!-- Crop + Identify buttons -->
             <div class="hero__action-row">
               <button class="hero__crop-btn" id="crop-btn">
                 <i class="fa fa-crop-simple"></i>
@@ -106,27 +95,21 @@ export function render() {
 
           </div>
 
-          <!-- Tips -->
           <div class="hero__tips" id="hero-tips">
             <span class="hero__tip"><i class="fa fa-check"></i> Crop close to the text</span>
             <span class="hero__tip"><i class="fa fa-check"></i> High contrast works best</span>
             <span class="hero__tip"><i class="fa fa-check"></i> Logos, signs, screenshots</span>
           </div>
 
-          <!-- Drag hint -->
           <p class="hero__drag-hint" id="hero-drag-hint">
             <i class="fa fa-hand-pointer"></i>
             or drag &amp; drop anywhere on the page
           </p>
 
         </div>
-        <!-- end left -->
-
-        <!-- ── RIGHT: Floating result card mockup ──────── -->
         <div class="hero__right" aria-hidden="true">
           <div class="hero__mockup">
 
-            <!-- Upload preview -->
             <div class="hero__mockup-upload">
               <div class="hero__mockup-upload-img">
                 <span style="font-family:'Georgia',serif;font-size:22px;font-weight:700;color:#fff;letter-spacing:0.02em">Helvetica</span>
@@ -140,12 +123,10 @@ export function render() {
               </div>
             </div>
 
-            <!-- Arrow -->
             <div class="hero__mockup-arrow">
               <i class="fa fa-arrow-down"></i>
             </div>
 
-            <!-- Result card -->
             <div class="hero__mockup-result">
               <div class="hero__mockup-result-head">
                 <div>
@@ -158,12 +139,10 @@ export function render() {
                 </div>
               </div>
 
-              <!-- Font preview -->
               <div class="hero__mockup-preview">
                 <span style="font-family:'Arial',sans-serif;font-size:28px;font-weight:400;color:rgba(255,255,255,0.9);letter-spacing:-0.01em">The quick brown fox</span>
               </div>
 
-              <!-- Links -->
               <div class="hero__mockup-links">
                 <span class="hero__mockup-link hero__mockup-link--paid">
                   <i class="fa fa-circle-info"></i> View Details
@@ -177,25 +156,19 @@ export function render() {
               </div>
             </div>
 
-            <!-- Floating tag -->
             <div class="hero__mockup-tag">
               <i class="fa fa-bolt"></i>
               Detected in 4.2s
             </div>
 
-            <!-- More results indicator -->
             <p class="hero__mockup-more">+ 9 more matches ranked below</p>
 
           </div>
         </div>
-        <!-- end right -->
+        </div>
 
-      </div>
-
-      <!-- ── Inline Crop Section ─────────────────────────── -->
       <div class="crop-section hidden" id="crop-section">
 
-        <!-- Top bar -->
         <div class="crop-section__topbar">
           <div class="crop-section__file-info">
             <i class="fa fa-image"></i>
@@ -210,11 +183,9 @@ export function render() {
           </button>
         </div>
 
-        <!-- Canvas area -->
         <div class="crop-section__canvas-area" id="crop-canvas-wrap">
           <canvas id="crop-canvas"></canvas>
 
-          <!-- Floating tooltip on selection -->
           <div class="crop-tooltip hidden" id="crop-tooltip">
             <button class="crop-tooltip__btn crop-tooltip__btn--primary" id="crop-confirm">
               <i class="fa fa-magnifying-glass"></i> Identify font
@@ -225,13 +196,11 @@ export function render() {
             </button>
           </div>
 
-          <!-- Drag hint -->
           <div class="crop-section__hint" id="crop-hint">
             <i class="fa fa-hand-pointer"></i> Click and drag to select the text you want to identify
           </div>
         </div>
 
-        <!-- Text detection bar (shown after selection) -->
         <div class="crop-text-bar hidden" id="crop-text-bar">
           <canvas id="crop-thumb-canvas" class="crop-text-bar__thumb"></canvas>
           <div class="crop-text-bar__right">
@@ -251,7 +220,6 @@ export function render() {
           </button>
         </div>
 
-        <!-- Bottom toolbar -->
         <div class="crop-toolbar">
           <label class="crop-toolbar__btn" for="crop-new-input">
             <i class="fa fa-arrow-up-from-bracket"></i> Upload new
@@ -273,7 +241,6 @@ export function render() {
 
       </div>
 
-      <!-- Bottom bar -->
       <div class="hero__bottom">
         <div class="container">
           <div class="hero__bottom-inner">
@@ -628,9 +595,10 @@ export function init() {
     off.width=rw; off.height=rh;
     const oc = off.getContext('2d');
     oc.save();
-    oc.translate(rw/2 - rx, rh/2 - ry);
+    // FIX: Use image center for rotation, not crop box center
+    oc.translate(-rx + (img.naturalWidth / 2), -ry + (img.naturalHeight / 2));
     oc.rotate((rotation * Math.PI) / 180);
-    oc.drawImage(img, -img.naturalWidth/2, -img.naturalHeight/2);
+    oc.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
     oc.restore();
     _croppedDataURL = off.toDataURL('image/png');
 
@@ -706,9 +674,10 @@ export function init() {
     off.width=rw; off.height=rh;
     const oc = off.getContext('2d');
     oc.save();
-    oc.translate(rw/2-rx, rh/2-ry);
+    // FIX: Align the canvas crop window precisely over the selected coordinates
+    oc.translate(-rx + (img.naturalWidth / 2), -ry + (img.naturalHeight / 2));
     oc.rotate((rotation * Math.PI) / 180);
-    oc.drawImage(img, -img.naturalWidth/2, -img.naturalHeight/2);
+    oc.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
     oc.restore();
 
     off.toBlob(blob => {

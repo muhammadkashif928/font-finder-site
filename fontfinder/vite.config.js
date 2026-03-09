@@ -24,8 +24,9 @@ export default defineConfig({
     port: 5175,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://65.109.163.100:8000',
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '') // <--- This fixes the 404!
       },
     },
   },

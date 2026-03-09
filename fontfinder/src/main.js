@@ -79,7 +79,6 @@ document.addEventListener('drop', e => {
   const fi = document.getElementById('file-input');
   fi.files = dt.files;
   fi.dispatchEvent(new Event('change'));
-  document.getElementById('hero')?.scrollIntoView({ behavior: 'smooth' });
 });
 
 // ── Font Identification Flow ──────────────────────────────────
@@ -93,24 +92,25 @@ document.addEventListener('ff:submit', async () => {
     let res, data;
 
     if (state.urlMode && state.url) {
-      res  = await fetch('/api/detect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: state.url }),
-      });
+      // 🚨 SAFEGUARD ADDED: 
+      // Since the backend now only expects Files, sending JSON will cause a 422 error.
+      // We block it here until the backend is updated to handle both.
+      throw new Error('URL mode is temporarily disabled. Please upload an image file instead.');
     } else if (state.file) {
       const fd = new FormData();
-      fd.append('image', state.file);
-      res = await fetch('/api/detect', { method: 'POST', body: fd });
+      fd.append('file', state.file);
+      // Ensure your vite.config.js proxy target is set to port 8000!
+      res = await fetch('/api/identify', { method: 'POST', body: fd });
     } else {
-      throw new Error('No image selected. Please upload a file or paste an image URL.');
+      throw new Error('No image selected. Please upload a file.');
     }
 
     data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || `Server error (${res.status})`);
-    // Pass detected text + cropped thumbnail from crop editor
-    if (state.detectedText) data.detected_text  = state.detectedText;
-    if (state.croppedThumb) data.cropped_thumb   = state.croppedThumb;
+    
+    if (state.detectedText) data.detected_text = state.detectedText;
+    if (state.croppedThumb) data.cropped_thumb = state.croppedThumb;
+    
     Results.showResults(data);
 
   } catch (err) {
@@ -124,7 +124,6 @@ document.addEventListener('ff:reset', () => Results.hide());
 // ── Scroll animation init ─────────────────────────────────────
 const animEls = document.querySelectorAll('.anim-up');
 
-// Trigger visible elements immediately (e.g. hero), rest on scroll
 const scrollObs = new IntersectionObserver(entries => {
   entries.forEach(e => {
     if (e.isIntersecting) {
@@ -136,7 +135,6 @@ const scrollObs = new IntersectionObserver(entries => {
 
 animEls.forEach(el => scrollObs.observe(el));
 
-// Safety: show all after 1.5s in case IntersectionObserver doesn't fire (e.g. bots/crawlers)
 setTimeout(() => {
   document.querySelectorAll('.anim-up:not(.visible)').forEach(el => {
     el.classList.add('visible');
