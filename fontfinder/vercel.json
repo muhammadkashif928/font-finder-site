@@ -4,6 +4,7 @@
   "framework": "vite",
   "rewrites": [
     { "source": "/api/(.*)",       "destination": "/api/$1" },
+    { "source": "/blog/:slug",     "destination": "/blog-post.html" },
     { "source": "/download",       "destination": "/api/download" },
     { "source": "/browse",    "destination": "/browse.html" },
     { "source": "/browse/(.*)", "destination": "/browse.html" },
