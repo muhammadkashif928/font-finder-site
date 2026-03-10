@@ -244,7 +244,7 @@ class FontImagePreprocessor:
             return 0.0
 
         # PCA: first principal component direction = text direction
-        mean, eigvec = cv2.PCACompute2(
+        mean, eigvec, _ = cv2.PCACompute2(
             text_pixels.astype(np.float32), mean=np.array([])
         )
         angle_rad = np.arctan2(eigvec[0, 1], eigvec[0, 0])
